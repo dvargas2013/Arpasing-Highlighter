@@ -20,10 +20,10 @@ namespace PS {
         public HashSet<string> Cs = new HashSet<string>();
         public HashSet<string> Vs = new HashSet<string>();
 
-        public HashSet<StringTuple> CCs = new HashSet<StringTuple>();
-        public HashSet<StringTuple> VVs = new HashSet<StringTuple>();
-        public HashSet<StringTuple> CVs = new HashSet<StringTuple>();
-        public HashSet<StringTuple> VCs = new HashSet<StringTuple>();
+        public Dictionary<StringTuple,int> CCs = new Dictionary<StringTuple,int>();
+        public Dictionary<StringTuple,int> VVs = new Dictionary<StringTuple,int>();
+        public Dictionary<StringTuple,int> CVs = new Dictionary<StringTuple,int>();
+        public Dictionary<StringTuple,int> VCs = new Dictionary<StringTuple,int>();
 
         public HashSet<StringTuple> notCCs = new HashSet<StringTuple>();
         public HashSet<StringTuple> notVVs = new HashSet<StringTuple>();
@@ -69,15 +69,28 @@ namespace PS {
                 + LineToString( misCV.Items )
                 + LineToString( misVC.Items )
                 + "```";
-            Clipboard.SetData( DataFormats.Text, s );
+            Clipboard.SetData( DataFormats.UnicodeText, s );
         }
 
         private string LineToString( ItemCollection lv ) {
             if ( lv.Count != 0 ) {
-                return string.Join( "  ", lv.OfType<StringTuple>().Select( item => item.ToString() ).ToList() ) + '\n';
+                return string.Join( "  ", lv.OfType<String>().ToList() ) + '\n';
             }
             return "";
         }
+
+        public readonly static char[] superscripts = "⁰¹²³⁴⁵⁶⁷⁸⁹".ToCharArray();
+        private string IntToSuperscript( int n ) {
+            int i = 1 + (int) Math.Floor( Math.Log10( n ) );
+            char[] s = new char[i];
+
+            while (i > 0) {
+                s[--i] = superscripts[n % 10];
+                n /= 10;
+            }
+
+            return "⁽" + new String(s) + "⁾";
+        } 
 
         private string lastSearch = "";
         private void ChangeSearch( string s ) {
@@ -85,13 +98,21 @@ namespace PS {
                 return;
             s = s.ToLower();
             Func<StringTuple, bool> f = (w => w.Item1 == s || w.Item2 == s);
+            Func<KeyValuePair<StringTuple, int>, bool> fkvp = (kvp => kvp.Key.Item1 == s || kvp.Key.Item2 == s);
 
-            hasCCVV.ItemsSource = (IsVowel(s)?VVs:CCs).OrderBy( i => i ).Where( f );
-            hasCV.ItemsSource = CVs.OrderBy( i => i ).Where( f );
-            hasVC.ItemsSource = VCs.OrderBy( i => i ).Where( f );
-            misCCVV.ItemsSource = (IsVowel( s ) ? notVVs : notCCs).OrderBy( i => i ).Where( f );
-            misCV.ItemsSource = notCVs.OrderBy( i => i ).Where( f );
-            misVC.ItemsSource = notVCs.OrderBy( i => i ).Where( f );
+            Func<StringTuple, string> g = (w => w.Item1.ToString()+" "+w.Item2.ToString());
+            Func<KeyValuePair<StringTuple, int>, string> gkvp =
+                (kvp => kvp.Key + " " + IntToSuperscript( kvp.Value ));
+
+            hasCCVV.ItemsSource = (IsVowel( s ) ? VVs : CCs)
+                                   .OrderBy( i => i.Key ).Where( fkvp ).Select( gkvp );
+            hasCV.ItemsSource = CVs.OrderBy( i => i.Key ).Where( fkvp ).Select( gkvp );
+            hasVC.ItemsSource = VCs.OrderBy( i => i.Key ).Where( fkvp ).Select( gkvp );
+
+            misCCVV.ItemsSource = (IsVowel( s ) ? notVVs : notCCs)
+                                      .OrderBy( i => i ).Where( f ).Select( g );
+            misCV.ItemsSource = notCVs.OrderBy( i => i ).Where( f ).Select( g );
+            misVC.ItemsSource = notVCs.OrderBy( i => i ).Where( f ).Select( g );
 
             lastSearch = s;
         }
@@ -147,15 +168,13 @@ namespace PS {
                 }
             }
 
-            notVVs.RemoveWhere( x => VVs.Contains( x ) );
-            notVCs.RemoveWhere( x => VCs.Contains( x ) );
-            notCVs.RemoveWhere( x => CVs.Contains( x ) );
-            notCCs.RemoveWhere( x => CCs.Contains( x ) );
+            notVVs.RemoveWhere( x => VVs.Keys.Contains( x ) );
+            notVCs.RemoveWhere( x => VCs.Keys.Contains( x ) );
+            notCVs.RemoveWhere( x => CVs.Keys.Contains( x ) );
+            notCCs.RemoveWhere( x => CCs.Keys.Contains( x ) );
         } ) );
 
         private void AddToProperSet( StringTuple pair ) {
-            // TODO : store a count of how many times it appears and display it in superscript on the thingoe
-
             bool i1v = IsVowel( pair.Item1 );
             bool i2v = IsVowel( pair.Item2 );
 
@@ -163,11 +182,19 @@ namespace PS {
             (i1v ? Vs : Cs).Add( pair.Item1 );
             (i2v ? Vs : Cs).Add( pair.Item2 );
 
-            // add to the proper list (VVs, CCs, CVs, VCs)
-            (i1v ?
-                (i2v ? VVs : VCs) : // item1 is V
-                (i2v ? CVs : CCs) // item1 is C
-                ).Add( pair );
+            // find the proper list (VVs, CCs, CVs, VCs)
+            Dictionary<StringTuple,int> CCVV
+                = (i1v ? (i2v ? VVs : VCs) : // item1 is V
+                         (i2v ? CVs : CCs) // item1 is C
+                  );
+
+            // find if already in dictionary
+            int num = 0;
+            if ( CCVV.ContainsKey( pair ) )
+                num = CCVV[pair]; 
+
+            // put into dictionary with modified value
+            CCVV[pair] = num + 1;
         }
 
         private static bool IsVowel( string s ) {
