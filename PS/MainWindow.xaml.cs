@@ -99,6 +99,10 @@ namespace PS {
         private void SetContent( string[] lines ) {
             Cs.Clear();
             Vs.Clear();
+            CCs.Clear();
+            VVs.Clear();
+            CVs.Clear();
+            VCs.Clear();
 
             foreach ( string line in lines ) {
                 string[] words = Parse_Line( line.ToLower() );
@@ -150,6 +154,8 @@ namespace PS {
         } ) );
 
         private void AddToProperSet( StringTuple pair ) {
+            // TODO : store a count of how many times it appears and display it in superscript on the thingoe
+
             bool i1v = IsVowel( pair.Item1 );
             bool i2v = IsVowel( pair.Item2 );
 
